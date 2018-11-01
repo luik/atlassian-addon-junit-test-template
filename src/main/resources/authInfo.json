@@ -1,0 +1,10 @@
+{
+  "status": 0,
+  "result": {
+    "username": "test-ungybg1zrtbz@example.com",
+    "id": "00DZ000000N8ezeMAB",
+    "connectedStatus": "Connected",
+    "accessToken": "00DZ000000N8eze!AQYAQNa_iKupheJY4JIbQVOz1j5jI5C_AAGEI9mlbvAXjp5KY.k8XaIUbHCEXtHBTA.mqrFINPX7T3nt06F6YuW06MFgnCqX",
+    "instanceUrl": "https://site-site-1612-dev-ed.cs11.my.salesforce.com"
+  }
+}
