@@ -4,7 +4,9 @@ import com.atlassian.json.jsonorg.JSONObject;
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +18,8 @@ import org.apache.http.HttpStatus;
 import com.atlassian.json.jsonorg.JSONArray;
 
 import javax.ws.rs.core.MediaType;
+import java.io.UnsupportedEncodingException;
+import java.util.*;
 
 @Component
 public class SalesforceRequestService {
@@ -33,58 +37,98 @@ public class SalesforceRequestService {
         this.salesforceConfigProvider = salesforceConfigProvider;
     }
 
-
     public JSONObject getArticleMetadata(String knowledgeArticleId) {
         String service = "/knowledgeManagement/articles/" + knowledgeArticleId;
         String errorMessage = "Could not retrieve Article Metadata with id=" + knowledgeArticleId  + ".";
 
-        return executeService(service, errorMessage);
+        return executeService(new HttpGet(service), errorMessage);
     }
 
     public JSONObject getMetadata(String knowledgeArticleId){
-        String service = "/query/?q=SELECT+Id," +
-                "IsVisibleInApp,IsVisibleInPkb,IsVisibleInCsp,IsVisibleInPrm," +
-                "RecordTypeId+FROM+" + getArticleType() + "+WHERE+Id='" + knowledgeArticleId + "'";
+        Map<String, String> getRecordTypes = getCompositeRequestEntry(
+                "/query/?q=SELECT+Id," +
+                        "Name,SobjectType+" +
+                        "FROM+RecordType+WHERE+SobjectType='" + getArticleType() + "'+AND+IsActive=true",
+                "record-types"
+        );
+        Map<String, String> getArticleEntity = getCompositeRequestEntry(
+                "/query/?q=SELECT+Id," +
+                        "IsVisibleInApp,IsVisibleInPkb,IsVisibleInCsp,IsVisibleInPrm," +
+                        "RecordTypeId+FROM+" + getArticleType() + "+WHERE+Id='" + knowledgeArticleId + "'",
+                "article"
+        );
+        Map<String, String> getArticleCategoriesEntity = getCompositeRequestEntry(
+                "/query/?q=SELECT+Id," +
+                        "ParentId,DataCategoryGroupName,DataCategoryName+" +
+                        "FROM+" + getArticleType().replace(KNOWLEDGE_ARTICLE_TYPE_POSTFIX, "")
+                        + "__DataCategorySelection+WHERE+ParentId='" + knowledgeArticleId + "'",
+                "categories"
+        );
 
-        logger.info(service);
+        JSONObject requestEntityData = new JSONObject();
+        requestEntityData.put("compositeRequest", Arrays.asList(
+                getRecordTypes,
+                getArticleEntity,
+                getArticleCategoriesEntity
+        ));
 
-        String errorMessage = "Could not retrieve Metadata with id=" + knowledgeArticleId  + ".";
-        JSONObject recordTypeAndChannelsData = executeService(service, errorMessage);
+        HttpPost httpPost = new HttpPost(buildSalesforceRestUrl("/composite"));
+        try {
+            httpPost.setEntity(new StringEntity(requestEntityData.toString()));
+        } catch (UnsupportedEncodingException e) {
+            logger.error("Error building Composite Request, "
+                    + requestEntityData.toString(), e);
+            e.printStackTrace();
+        }
 
-        if(recordTypeAndChannelsData == null){
+        JSONObject metadata =
+                executeService(httpPost, "Could not retrieve Article Metadata with id=" + knowledgeArticleId  + ".");
+
+        if(metadata == null){
             return null;
         }
 
-        service = "/query/?q=SELECT+Id," +
-                "ParentId,DataCategoryGroupName,DataCategoryName+" +
-                "FROM+" + getArticleType().replace(KNOWLEDGE_ARTICLE_TYPE_POSTFIX, "")
-                + "__DataCategorySelection+WHERE+ParentId='" + knowledgeArticleId + "'";
+        // return the error response
+        if( !metadata.has("compositeResponse") ){
+            return metadata;
+        }
 
-        logger.info(service);
-
-        JSONObject categoriesData = executeService(service, errorMessage);
-
-        if(categoriesData == null){
-            return null;
+        for(JSONObject jsonObject : metadata.getJSONArray("compositeResponse").objects()){
+            if(jsonObject.getInt("httpStatusCode") != HttpStatus.SC_OK){
+                logger.info(jsonObject.toString());
+                return new JSONObject().put("error", true)
+                        .put("httpStatus", jsonObject.getInt("httpStatusCode"))
+                        .put("httpMessage", jsonObject.get("body"))
+                        .put("referenceId", jsonObject.getString("referenceId"));
+            }
         }
 
         JSONObject responseJSON = new JSONObject();
-        responseJSON.put("metadata", recordTypeAndChannelsData);
-        responseJSON.put("categoriesMetadata", categoriesData);
-
+        for(JSONObject jsonObject : metadata.getJSONArray("compositeResponse").objects()){
+            responseJSON.put(jsonObject.getString("referenceId"), jsonObject.get("body"));
+        }
         return responseJSON;
     }
 
-    private JSONObject executeService(String service, String errorMessage){
-        HttpGet httpGet = new HttpGet(buildSalesforceRestUrl(service));
+    private Map<String, String> getCompositeRequestEntry(String service, String referenceId){
+        Map<String, String> getArticleDataEntity = new HashMap<>();
+        getArticleDataEntity.put("method", "GET");
+
+        getArticleDataEntity.put("url", buildSalesforceRestUrlRelative(service));
+        getArticleDataEntity.put("referenceId", referenceId);
+
+        return getArticleDataEntity;
+    }
+
+    private JSONObject executeService(HttpRequestBase httpRequest, String errorMessage){
         try {
-            HttpResponse httpResponse = sendRequest(httpGet);
+            HttpResponse httpResponse = sendRequest(httpRequest);
             String responseContent = EntityUtils.toString(httpResponse.getEntity());
             return getResponse(httpResponse, responseContent);
         } catch (Exception ex) {
             logger.error(errorMessage, ex);
         } finally {
-            httpGet.releaseConnection();
+            httpRequest.releaseConnection();
         }
         return null;
     }
@@ -101,7 +145,11 @@ public class SalesforceRequestService {
     }
 
     private String buildSalesforceRestUrl(String service) {
-        return salesforceConfigProvider.getInstanceUrl() + "/services/data/" + apiVersion  + service;
+        return salesforceConfigProvider.getInstanceUrl() + buildSalesforceRestUrlRelative(service);
+    }
+
+    private String buildSalesforceRestUrlRelative(String service){
+        return "/services/data/" + apiVersion  + service;
     }
 
     private HttpResponse sendRequest(HttpRequestBase request) throws ClientProtocolException, Exception {
