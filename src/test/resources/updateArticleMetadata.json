@@ -1,11 +1,36 @@
 {
-  "IsVisibleInPkb": true,
-  "IsVisibleInCsp": true,
-  "IsVisibleInPrm": false,
-  "RecordTypeId": "012Z0000000NmSVIA0",
-  "Categories": [
-    "group7",
-    "group9"
+  "channels": [
+    "IsVisibleInCsp",
+    "IsVisibleInPrm"
   ],
-  "CategoryGroup": "group1"
+  "recordType": {
+    "id": "012Z0000000NmSVIA0",
+    "name": "recordType2"
+  },
+  "categories": [
+    {
+      "categoryGroup": "group100",
+      "category": "group103"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group201"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group212"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group213"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group7"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group3"
+    }
+  ]
 }

@@ -20,14 +20,15 @@ public class ArticleMetadataTest {
 
     private Logger logger = LoggerFactory.getLogger(getClass());
     private ObjectMapper objectMapper = new ObjectMapper();
-    private String articleId = "ka0Z0000000AbVFIA0";
+    private String articleVersionId = "ka0Z0000000AbVFIA0";
+    private String articleId = "kA0Z00000009JaGKAU";
 
     @Autowired
     private SalesforceRequestService salesforceRequestService;
 
     @Test
     public void testGetArticleMetadata(){
-        JSONObject metadata = salesforceRequestService.getMetadata(articleId);
+        JSONObject metadata = salesforceRequestService.getMetadata(articleVersionId);
 
         logger.info(metadata.toString());
     }
@@ -38,7 +39,18 @@ public class ArticleMetadataTest {
                 objectMapper.readValue(Thread.currentThread().getContextClassLoader().getResource("updateArticleMetadata.json"),
                         UpdateArticleMetadataRequest.class);
 
-        JSONObject response = salesforceRequestService.setMetadata(articleId, updateArticleMetadataRequest);
+        JSONObject response = salesforceRequestService.setMetadata(articleVersionId, updateArticleMetadataRequest);
+
+        if(response.has("patchResult") && response.has("updateCategoriesResult")){
+            logger.info("success");
+        }
+
+        logger.info(response.toString());
+    }
+
+    @Test
+    public void testGetDraft() throws IOException {
+        JSONObject response = salesforceRequestService.getArticleVersionDraft(articleId);
         logger.info(response.toString());
     }
 

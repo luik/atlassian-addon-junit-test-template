@@ -16,6 +16,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.HttpResponse;
 import org.apache.http.util.EntityUtils;
 import org.apache.http.HttpStatus;
+import org.apache.commons.lang3.StringUtils;
 import com.atlassian.json.jsonorg.JSONArray;
 
 import javax.ws.rs.core.MediaType;
@@ -42,7 +43,29 @@ public class SalesforceRequestService {
         String service = "/knowledgeManagement/articles/" + knowledgeArticleId;
         String errorMessage = "Could not retrieve Article Metadata with id=" + knowledgeArticleId  + ".";
 
-        return executeService(new HttpGet(service), errorMessage);
+        return executeService(new HttpGet( buildSalesforceRestUrl(service) ), errorMessage);
+    }
+
+    public JSONObject getArticleVersionDraft(String knowledgeArticleId) throws UnsupportedEncodingException {
+        JSONObject articleMetadata = getArticleMetadata(knowledgeArticleId);
+
+        String draftVersionId = articleMetadata.getString("draftArticleMasterVersionId");
+        if( StringUtils.isEmpty(draftVersionId) ){
+            String service = "/knowledgeManagement/articleVersions/masterVersions";
+            String errorMessage = "Could not retrieve Draft Article Version of Article with Id " + knowledgeArticleId;
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("articleId", knowledgeArticleId);
+
+            HttpPost postRequest = new HttpPost( buildSalesforceRestUrl(service) );
+            postRequest.setEntity(new StringEntity(requestBody.toString()));
+
+            return executeService(postRequest, errorMessage);
+        }
+
+        JSONObject response = new JSONObject();
+        response.put("id", draftVersionId);
+
+        return response;
     }
 
     public JSONObject getMetadata(String knowledgeArticleId){
@@ -82,10 +105,11 @@ public class SalesforceRequestService {
     public JSONObject setMetadata(String knowledgeArticleId, UpdateArticleMetadataRequest updateArticleMetadataRequest){
 
         JSONObject patchBody = new JSONObject();
-        patchBody.put("IsVisibleInPkb", updateArticleMetadataRequest.isVisibleInPkb());
-        patchBody.put("IsVisibleInCsp",  updateArticleMetadataRequest.isVisibleInCsp());
-        patchBody.put("IsVisibleInPrm", updateArticleMetadataRequest.isVisibleInPrm());
-        patchBody.put("RecordTypeId", updateArticleMetadataRequest.getRecordTypeId());
+
+        patchBody.put("IsVisibleInPkb", updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPkb") >= 0);
+        patchBody.put("IsVisibleInCsp",  updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInCsp") >= 0);
+        patchBody.put("IsVisibleInPrm", updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPrm") >= 0);
+        patchBody.put("RecordTypeId", updateArticleMetadataRequest.getRecordType().getId());
 
         Map<String, Object> patchArticle = getCompositeRequestEntry(
                 "/sobjects/" + getArticleType() +"/" + knowledgeArticleId,
@@ -112,23 +136,32 @@ public class SalesforceRequestService {
 
         JSONObject remoteCategories = compositeResponse.response.getJSONObject("categories");
 
-        List<String> categories = new ArrayList<>();
+        List<JSONObject> categories = new ArrayList<>();
         List<JSONObject> categoriesToAdd = new ArrayList<>();
         List<JSONObject> categoriesToDelete = new ArrayList<>();
 
         remoteCategories.getJSONArray("records").forEach(categoryData -> {
             JSONObject categoryJson = (JSONObject) categoryData;
-            categories.add(categoryJson.getString("DataCategoryName"));
+            categories.add(categoryJson);
 
-            if(!updateArticleMetadataRequest.getCategories().contains(categoryJson.getString("DataCategoryName")) &&
-                    updateArticleMetadataRequest.getCategoryGroup().equals(categoryJson.getString("DataCategoryGroupName"))
+            if(
+                    updateArticleMetadataRequest.getCategories().stream()
+                            .noneMatch(categoryRequest ->
+                                (categoryRequest.getCategoryGroup() + ":" + categoryRequest.getCategory()).equals(
+                                        categoryJson.getString("DataCategoryGroupName") + ":"
+                                                + categoryJson.getString("DataCategoryName")))
             ){
                 categoriesToDelete.add(categoryJson);
             }
         });
 
-        updateArticleMetadataRequest.getCategories().forEach(requestCategoryName -> {
-            if(!categories.contains(requestCategoryName)){
+        updateArticleMetadataRequest.getCategories().forEach(requestCategory -> {
+            if(
+                    categories.stream().noneMatch(categoryRemote -> (
+                            categoryRemote.getString("DataCategoryGroupName") + ":" +
+                            categoryRemote.getString("DataCategoryName")
+                        ).equals(requestCategory.getCategoryGroup() + ":" + requestCategory.getCategory()))
+            ){
                 JSONObject categoryToAdd = new JSONObject();
                 JSONObject categoryAttributes = new JSONObject();
                 categoryAttributes.put("type",getArticleType().replace(KNOWLEDGE_ARTICLE_TYPE_POSTFIX, "")
@@ -136,8 +169,8 @@ public class SalesforceRequestService {
 
                 categoryToAdd.put("attributes", categoryAttributes);
                 categoryToAdd.put("ParentId", knowledgeArticleId);
-                categoryToAdd.put("DataCategoryGroupName", updateArticleMetadataRequest.getCategoryGroup());
-                categoryToAdd.put("DataCategoryName", requestCategoryName);
+                categoryToAdd.put("DataCategoryGroupName", requestCategory.getCategoryGroup());
+                categoryToAdd.put("DataCategoryName", requestCategory.getCategory());
 
                 categoriesToAdd.add(categoryToAdd);
             }
@@ -279,7 +312,9 @@ public class SalesforceRequestService {
     }
 
     private JSONObject getResponse(HttpResponse httpResponse, String responseContent) {
-        if (httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+        if ( httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_OK ||
+                httpResponse.getStatusLine().getStatusCode() == HttpStatus.SC_CREATED
+        ) {
             return new JSONObject(responseContent);
         }
         else {
