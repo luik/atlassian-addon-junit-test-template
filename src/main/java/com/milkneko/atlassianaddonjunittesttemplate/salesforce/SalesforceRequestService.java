@@ -77,9 +77,7 @@ public class SalesforceRequestService {
                 "GET"
         );
         Map<String, Object> getArticleEntity = getCompositeRequestEntry(
-                "/query/?q=SELECT+Id," +
-                        "IsVisibleInApp,IsVisibleInPkb,IsVisibleInCsp,IsVisibleInPrm," +
-                        "RecordTypeId+FROM+" + getArticleType() + "+WHERE+Id='" + knowledgeArticleId + "'",
+                "/sobjects/" + getArticleType() + "/" + knowledgeArticleId,
                 "article",
                 "GET"
         );
@@ -109,7 +107,9 @@ public class SalesforceRequestService {
         patchBody.put("IsVisibleInPkb", updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPkb") >= 0);
         patchBody.put("IsVisibleInCsp",  updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInCsp") >= 0);
         patchBody.put("IsVisibleInPrm", updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPrm") >= 0);
-        patchBody.put("RecordTypeId", updateArticleMetadataRequest.getRecordType().getId());
+        if( updateArticleMetadataRequest.getRecordType() != null ){
+            patchBody.put("RecordTypeId", updateArticleMetadataRequest.getRecordType().getId());
+        }
 
         Map<String, Object> patchArticle = getCompositeRequestEntry(
                 "/sobjects/" + getArticleType() +"/" + knowledgeArticleId,
