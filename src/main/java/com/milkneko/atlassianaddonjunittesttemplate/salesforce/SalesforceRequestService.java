@@ -111,6 +111,18 @@ public class SalesforceRequestService {
             patchBody.put("RecordTypeId", updateArticleMetadataRequest.getRecordType().getId());
         }
 
+        Map<String, Object> getOriginalArticleEntity = getCompositeRequestEntry(
+                "/sobjects/" + getArticleType() + "/" + knowledgeArticleId,
+                "original-article",
+                "GET"
+        );
+        Map<String, Object> getRecordTypes = getCompositeRequestEntry(
+                "/query/?q=SELECT+Id," +
+                        "Name,SobjectType+" +
+                        "FROM+RecordType+WHERE+SobjectType='" + getArticleType() + "'+AND+IsActive=true",
+                "record-types",
+                "GET"
+        );
         Map<String, Object> patchArticle = getCompositeRequestEntry(
                 "/sobjects/" + getArticleType() +"/" + knowledgeArticleId,
                 "article",
@@ -127,14 +139,21 @@ public class SalesforceRequestService {
         );
 
         CompositeResponse compositeResponse =
-                getCompositeResponse(Arrays.asList(patchArticle, getArticleCategories),
+                getCompositeResponse(Arrays.asList(
+                        getOriginalArticleEntity,
+                        patchArticle,
+                        getArticleCategories,
+                        getRecordTypes
+                        ),
                         "Unable to patch or get article metadata with id " + knowledgeArticleId);
 
         if(!compositeResponse.success){
             return compositeResponse.response;
         }
 
+        JSONObject originalArticle = compositeResponse.response.getJSONObject("original-article");
         JSONObject remoteCategories = compositeResponse.response.getJSONObject("categories");
+        JSONObject recordTypes = compositeResponse.response.getJSONObject("record-types");
 
         List<JSONObject> categories = new ArrayList<>();
         List<JSONObject> categoriesToAdd = new ArrayList<>();
@@ -179,7 +198,9 @@ public class SalesforceRequestService {
         if(categoriesToAdd.size() == 0 && categoriesToDelete.size() == 0){
             JSONObject updateResponse = new JSONObject();
             updateResponse.put("patchResult", compositeResponse.response.get("article"));
-
+            updateResponse.put("updateCategoriesResult", "[]");
+            updateResponse.put("delta", createUpdateMetadataDelta(originalArticle, recordTypes,
+                    updateArticleMetadataRequest, categoriesToAdd, categoriesToDelete, null));
             return updateResponse;
         }
 
@@ -221,8 +242,93 @@ public class SalesforceRequestService {
         JSONObject updateResponse = new JSONObject();
         updateResponse.put("patchResult", compositeResponse.response.get("article"));
         updateResponse.put("updateCategoriesResult", writeCompositeResponse.response);
+        updateResponse.put("delta", createUpdateMetadataDelta(originalArticle, recordTypes,
+                updateArticleMetadataRequest, categoriesToAdd, categoriesToDelete, writeCompositeResponse));
 
         return updateResponse;
+    }
+
+    private JSONObject createUpdateMetadataDelta(JSONObject originalArticle,
+                                                 JSONObject recordTypes,
+                                                 UpdateArticleMetadataRequest updateArticleMetadataRequest,
+                                                 List<JSONObject> categoriesToAdd,
+                                                 List<JSONObject> categoriesToDelete,
+                                                 CompositeResponse writeCompositeResponse
+                                                 ){
+        JSONObject delta = new JSONObject();
+
+        if(originalArticle.getBoolean("IsVisibleInPkb") !=
+                updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPkb") >= 0){
+            delta.put("IsVisibleInPkb", new String[]{
+                    String.valueOf(originalArticle.getBoolean("IsVisibleInPkb")),
+                    String.valueOf(updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPkb") >= 0) });
+        }
+
+        if(originalArticle.getBoolean("IsVisibleInCsp") !=
+                updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInCsp") >= 0
+        ){
+            delta.put("IsVisibleInCsp", new String[]{
+                    String.valueOf(originalArticle.getBoolean("IsVisibleInCsp")),
+                    String.valueOf(updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInCsp") >= 0) });
+        }
+
+        if(originalArticle.getBoolean("IsVisibleInPrm") !=
+                updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPrm") >= 0
+        ){
+            delta.put("IsVisibleInPrm", new String[]{
+                    String.valueOf(originalArticle.getBoolean("IsVisibleInPrm")),
+                    String.valueOf(updateArticleMetadataRequest.getChannels().indexOf("IsVisibleInPrm") >= 0) });
+        }
+
+        Map<String, String> recordId2recordNameMap = new HashMap<>();
+        if( updateArticleMetadataRequest.getRecordType() != null ){
+            JSONArray records = recordTypes.getJSONArray("records");
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject recordType = records.getJSONObject(i);
+                recordId2recordNameMap.put(recordType.getString("Id"), recordType.getString("Name"));
+            }
+
+            if( !originalArticle.getString("RecordTypeId").equals(updateArticleMetadataRequest.getRecordType().getId())) {
+                delta.put("RecordType", new String[]{
+                        recordId2recordNameMap.get(originalArticle.getString("RecordTypeId")),
+                        recordId2recordNameMap.get(updateArticleMetadataRequest.getRecordType().getId())
+                });
+            }
+        }
+
+        for (int i = 0; i < categoriesToAdd.size(); i++) {
+            delta.put("Add Data Category " + (i + 1),
+                    new String[] { "",
+                    categoriesToAdd.get(i).getString("DataCategoryGroupName")  + ":"
+                + categoriesToAdd.get(i).getString("DataCategoryName") }
+            );
+        }
+
+        for (int i = 0; i < categoriesToDelete.size(); i++) {
+            delta.put("Remove Data Category " + (i + 1),
+                    new String[] {
+                    categoriesToDelete.get(i).getString("DataCategoryGroupName")  + ":"
+                    + categoriesToDelete.get(i).getString("DataCategoryName") ,
+                    "" }
+            );
+        }
+
+        if (writeCompositeResponse == null) {
+            return delta;
+        }
+
+        // if possible that some categories are not created because limit exceed
+        if(writeCompositeResponse.response.has("add-response")){
+            for (JSONObject addResponseItem : writeCompositeResponse.response.getJSONArray("add-response").objects()) {
+                if( !addResponseItem.getBoolean("success") ){
+                    delta.put("Error Updating categories",
+                            new String[]{"", addResponseItem.getJSONArray("errors").toString()});
+                    break;
+                }
+            }
+        }
+
+        return delta;
     }
 
     private static class CompositeResponse{

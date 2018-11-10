@@ -1,0 +1,11 @@
+{
+  "channels": [
+    "IsVisibleInCsp",
+    "IsVisibleInPrm"
+  ],
+  "recordType": {
+    "id": "012Z0000000NmSVIA0",
+    "name": "recordType2"
+  },
+  "categories": []
+}

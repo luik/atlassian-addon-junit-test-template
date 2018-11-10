@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.io.IOException;
+import java.util.Iterator;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -36,7 +37,8 @@ public class ArticleMetadataTest {
     @Test
     public void testPutArticleMetadata() throws IOException {
         UpdateArticleMetadataRequest updateArticleMetadataRequest =
-                objectMapper.readValue(Thread.currentThread().getContextClassLoader().getResource("updateArticleMetadata.json"),
+                objectMapper.readValue(Thread.currentThread().getContextClassLoader()
+                                .getResource("updateArticleMetadata.json"),
                         UpdateArticleMetadataRequest.class);
 
         JSONObject response = salesforceRequestService.setMetadata(articleVersionId, updateArticleMetadataRequest);
@@ -49,9 +51,46 @@ public class ArticleMetadataTest {
     }
 
     @Test
+    public void testPutArticleMetadataManyCategories() throws IOException{
+        UpdateArticleMetadataRequest updateArticleMetadataRequest =
+                objectMapper.readValue(Thread.currentThread().getContextClassLoader()
+                                .getResource("updateArticleMetadata-manyCategories.json"),
+                        UpdateArticleMetadataRequest.class);
+
+        JSONObject response = salesforceRequestService.setMetadata(articleVersionId, updateArticleMetadataRequest);
+        logger.info(response.toString());
+
+        JSONObject delta = response.getJSONObject("delta");
+        printDelta(delta);
+    }
+
+    @Test
+    public void testPutArticleMetadataWithoutCategories() throws IOException{
+        UpdateArticleMetadataRequest updateArticleMetadataRequest =
+                objectMapper.readValue(Thread.currentThread().getContextClassLoader()
+                                .getResource("updateArticleMetadata-withoutCategories.json"),
+                        UpdateArticleMetadataRequest.class);
+
+        JSONObject response = salesforceRequestService.setMetadata(articleVersionId, updateArticleMetadataRequest);
+        logger.info(response.toString());
+
+        JSONObject delta = response.getJSONObject("delta");
+        printDelta(delta);
+    }
+
+    @Test
     public void testGetDraft() throws IOException {
         JSONObject response = salesforceRequestService.getArticleVersionDraft(articleId);
         logger.info(response.toString());
+    }
+
+    private void printDelta(JSONObject delta){
+        Iterator<String> deltaIterator = delta.keys();
+        while (deltaIterator.hasNext()){
+            String deltaKey = deltaIterator.next();
+            String[] values = (String[]) delta.get(deltaKey);
+            System.out.println(deltaKey + "\t" + values[0] + "\t" + values[1]);
+        }
     }
 
 }

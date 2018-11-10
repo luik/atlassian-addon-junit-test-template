@@ -1,0 +1,112 @@
+{
+  "channels": [
+    "IsVisibleInCsp",
+    "IsVisibleInPrm"
+  ],
+  "recordType": {
+    "id": "012Z0000000NmSVIA0",
+    "name": "recordType2"
+  },
+  "categories": [
+    {
+      "categoryGroup": "group100",
+      "category": "group102"
+    },
+    {
+      "categoryGroup": "group100",
+      "category": "group107"
+    },
+    {
+      "categoryGroup": "group100",
+      "category": "grop103"
+    },
+    {
+      "categoryGroup": "group100",
+      "category": "gropup106"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group201"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group210"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group209"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group207"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group204"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group211"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group212"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group213"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group214"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group215"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group217"
+    },
+    {
+      "categoryGroup": "group200",
+      "category": "group218"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group10"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group14"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group7"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group3"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group216"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group8"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group12"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group13"
+    },
+    {
+      "categoryGroup": "group1",
+      "category": "group5"
+    }
+  ]
+}
